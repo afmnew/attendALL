@@ -30,8 +30,8 @@
         <strong>Instructions:</strong>
         <ol style="margin: 8px 0 0 0; padding-left: 20px;">
           <li>Create a new blank <a href="https://sheets.new" target="_blank">Google Sheet</a>.</li>
-          <li>Click <strong>Share</strong> and add the administrator's email as an <strong>Editor</strong>.</li>
-          <li>Paste your Google Sheet link below and click <strong>Create Classroom QR</strong>.</li>
+          <li>Click <strong>Share</strong> and add your Apps Script service account or admin as <strong>Editor</strong>.</li>
+          <li>Paste the sheet link below and click <strong>Create Classroom QR</strong>.</li>
         </ol>
       </div>
 
@@ -57,14 +57,13 @@
       <h2>Record Attendance</h2>
       <form id="attendanceForm">
         <label for="studentId">Student ID</label>
-        <input type="text" id="studentId" required placeholder="Enter ID">
+        <input type="text" id="studentId" required placeholder="Enter ID (any format)">
 
         <label for="name">Full Name (in Arabic)</label>
         <input type="text" id="name" required minlength="3" placeholder="Full Name">
 
-        <!-- Group Free-Text Box -->
-        <label for="groupInput">Group /section </label>
-        <input type="text" id="groupInput" required placeholder="e.g. Group A or Section 3">
+        <label for="groupInput">Group / Section</label>
+        <input type="text" id="groupInput" required placeholder="e.g. A1, Group B, Sec 3">
 
         <button type="submit" id="submitBtn">Submit Attendance</button>
       </form>
@@ -74,13 +73,13 @@
   </div>
 
   <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx10Tyvra4fHN7dUafDa-JUZGU5PoMs3yBOu5gskC_dyQw4J64osvdfksMO_QJQh2jU-A/exec";
+    // YOUR CURRENT APPS SCRIPT WEB APP URL:
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCBt_wyeFs6qCn2wfhhcMjE90KS3vdMyn2BFGVjHSd2xpXLsq_U0XHESqQ9V0CNTmpsw/exec";
 
     const urlParams = new URLSearchParams(window.location.search);
     const sheetId = urlParams.get("sheetId");
     const startMs = urlParams.get("start");
     const endMs = urlParams.get("end");
-    const sessionToken = urlParams.get("token") || "";
 
     if (sheetId) {
       document.getElementById("studentView").style.display = "block";
@@ -94,11 +93,10 @@
       return match ? match[1] : input.trim();
     }
 
-    async function generateQR() {
+    function generateQR() {
       const input = document.getElementById("sheetInput").value.trim();
       const startVal = document.getElementById("startTime").value;
       const endVal = document.getElementById("endTime").value;
-      const genBtn = document.getElementById("genBtn");
 
       if (!input) return alert("Please enter a Google Sheet URL or ID.");
 
@@ -112,24 +110,10 @@
         const sMs = new Date(startVal).getTime();
         const eMs = new Date(endVal).getTime();
 
+        if (isNaN(sMs) || isNaN(eMs)) return alert("Please select valid dates and times.");
         if (eMs <= sMs) return alert("Close time must be after Open time.");
 
-        genBtn.disabled = true;
-        genBtn.innerText = "Generating token...";
-
-        try {
-          const res = await fetch(`${APPS_SCRIPT_URL}?action=sign&sheetId=${cleanSheetId}&start=${sMs}&end=${eMs}`);
-          const signData = await res.json();
-          studentUrl += `&start=${sMs}&end=${eMs}&token=${signData.token}`;
-        } catch(e) {
-          alert("Could not create signed token: " + e.message);
-          genBtn.disabled = false;
-          genBtn.innerText = "Create Classroom QR";
-          return;
-        }
-
-        genBtn.disabled = false;
-        genBtn.innerText = "Create Classroom QR";
+        studentUrl += `&start=${sMs}&end=${eMs}`;
 
         windowText = `
           <b>Active Window:</b><br>
@@ -158,7 +142,6 @@
       return uuid;
     }
 
-    // Geolocation handler enforcing GPS acquisition
     function fetchCurrentPosition() {
       return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
@@ -171,9 +154,9 @@
               (pos2) => resolve({ lat: pos2.coords.latitude, lon: pos2.coords.longitude }),
               () => {
                 let reason = "Please enable Location/GPS in your phone settings to submit attendance.";
-                if (err.code === 1) reason = "Location permission denied. Please allow location access in your browser settings.";
-                else if (err.code === 2) reason = "Location unavailable. Please make sure phone GPS is enabled.";
-                else if (err.code === 3) reason = "Location request timed out. Please try again with GPS active.";
+                if (err.code === 1) reason = "Location permission denied. Please allow location access in browser settings.";
+                else if (err.code === 2) reason = "Location unavailable. Please make sure phone GPS is active.";
+                else if (err.code === 3) reason = "Location request timed out. Please try again with GPS turned on.";
                 reject(new Error(reason));
               },
               { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
@@ -186,6 +169,7 @@
 
     function initStudentView() {
       const msg = document.getElementById("statusMsg");
+      const submitBtn = document.getElementById("submitBtn");
 
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 3000 });
@@ -199,19 +183,18 @@
         if (now < s) {
           msg.style.color = "#d9534f";
           msg.innerText = "Attendance is not open yet. Opens: " + new Date(s).toLocaleString();
-          document.getElementById("submitBtn").disabled = true;
+          submitBtn.disabled = true;
           return;
         } else if (now > e) {
           msg.style.color = "#d9534f";
           msg.innerText = "Attendance window has closed for this session.";
-          document.getElementById("submitBtn").disabled = true;
+          submitBtn.disabled = true;
           return;
         }
       }
 
       document.getElementById("attendanceForm").addEventListener("submit", async ev => {
         ev.preventDefault();
-        const submitBtn = document.getElementById("submitBtn");
         submitBtn.disabled = true;
         msg.style.color = "#0066cc";
         msg.innerText = "Acquiring GPS location...";
@@ -233,7 +216,6 @@
             sheetId: sheetId,
             startTime: startMs || "",
             endTime: endMs || "",
-            token: sessionToken,
             studentId: document.getElementById("studentId").value.trim(),
             name: document.getElementById("name").value.trim(),
             group: document.getElementById("groupInput").value.trim(),
