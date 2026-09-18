@@ -74,7 +74,7 @@
 
   <script>
     // YOUR CURRENT APPS SCRIPT WEB APP URL:
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCBt_wyeFs6qCn2wfhhcMjE90KS3vdMyn2BFGVjHSd2xpXLsq_U0XHESqQ9V0CNTmpsw/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx9iSNw3w2mIc2vgjDaMSXVN1SEQFsbNplbxQ3n4Xk6bA0lrnMBEG2o-XJvEZmySnPozA/exec";
 
     const urlParams = new URLSearchParams(window.location.search);
     const sheetId = urlParams.get("sheetId");
@@ -226,23 +226,28 @@
 
           const res = await fetch(APPS_SCRIPT_URL, {
             method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            headers: {
+              // Must NOT be application/json (triggers preflight CORS error)
+              "Content-Type": "text/plain;charset=utf-8"
+            },
             body: JSON.stringify(payload)
           });
 
           const data = await res.json();
+
           if (data.status === "success") {
             msg.style.color = "#28a745";
-            msg.innerText = data.message;
+            msg.innerText = "✅ " + data.message;
             document.getElementById("attendanceForm").reset();
           } else {
             msg.style.color = "#d9534f";
-            msg.innerText = data.message;
+            msg.innerText = "⚠️ " + data.message;
             submitBtn.disabled = false;
           }
         } catch (err) {
+          // If the row was written, fetch failed at the response step
           msg.style.color = "#d9534f";
-          msg.innerText = "Submission failed: " + err.message;
+          msg.innerText = "Submission error: " + err.message;
           submitBtn.disabled = false;
         }
       });
